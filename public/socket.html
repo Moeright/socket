@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>多人会话/wechat</title>
+    <link href="css/socket.css" rel="stylesheet" />
+</head>
+<body>
+  <div class="bg">
+    <!-- 头部听筒部分 -->
+    <div class="earbg">
+      <div class="ear">
+      </div>
+    </div>
+    <!-- 主要内容部分 -->
+    <div class="box">
+      <!-- 会话框 -->
+      <ul id="list">
+      </ul>
+      <!--换头像部分  -->
+      <div id="pic-box">
+          <div  class="pic-list-wrap">
+              <div class="first">img url：
+                  <textarea id="img-url"></textarea>
+              </div>
+              <ul id="pic-list">
+              </ul>
+              <button id="sure-btn">确定</button>
+          </div>
+      </div>
+      <!--底部输入框,改头像框  -->
+      <div class="ctrl">
+          <button id="rname">改名</button>
+          <input id="text" />
+          <button id="btn">发送</button>
+          <button id="change-pic">修改头像</button>
+      </div>
+    </div>
+    <!--底部home键  -->
+    <div class="circle">
+    </div>
+  </div>
+<script src="js/socket.io.js"></script>
+<script>
+
+    //图像列表部分
+    var imgUrl = document.getElementById("img-url"); //用户输入的url框
+    var picBox = document.getElementById("pic-box"); //大遮罩
+    var sureBtn = document.getElementById("sure-btn"); //确认按钮
+    var picList = document.getElementById("pic-list"); //图像列表
+    //图像列表的数据
+    var picData = [
+        "images/1.jpg",
+        "images/2.jpg",
+        "images/3.jpg",
+        "images/4.jpg",
+        "images/5.jpg"
+    ];
+    //生成图像列表
+    var str = "";
+    picData.forEach(e=>{
+        str+='<li><img class="pic-item" img src="'+e+'"></li>'
+    });
+    picList.innerHTML = str;
+
+    // 图像列表 的图像被点击的
+    var picItem = document.getElementsByClassName("pic-item");
+    // 循环添加事件
+    for(var i=0;i<picItem.length;i++){
+        picItem[i].onclick=function () {
+          // 当点击时,给所有的父元素去掉active属性，当前的添加活动属性
+            for(var j=0;j<picItem.length;j++){
+                picItem[j].parentNode.className = ""
+            }
+            this.parentNode.className = "active";
+            newPic = this.src;
+        }
+    }
+
+    var list = document.getElementById("list"); //消息列表
+    var btn = document.getElementById("btn"); //发送消息按钮
+    var text = document.getElementById("text"); //消息框
+    var rname = document.getElementById("rname"); //修改昵称按钮
+    var changePic = document.getElementById("change-pic");//修改图像按钮
+    var newPic = "";//新头像的地址
+
+
+    //io 是socket.io.js提供的，可以兼容各个浏览器
+    //连接socket server
+    var socket = io.connect("http://10.9.151.7:8080");
+    socket.on("sendUserInfo",function (userInfo) {
+        //把用户信息变成window的属性
+        window.userInfo = userInfo
+    });
+      // 当socket检测到信息的时候
+      //接收别人发送的消息，接收的是对象的格式
+    socket.on("message",function (data) {
+        console.log(data);
+        /*
+         * data= {
+         msg:msg,
+         userInfo:{
+         name:"某某某"
+         }接收的data的数据格式
+         }
+         * */
+        //  创建发送信息的列表，包含头像，姓名，发送的信息，添加到内容页
+        var oLi = document.createElement("li");
+        oLi.innerHTML = '<img src="'+data.userInfo.picUrl+'" /><p>'+data.userInfo.name+': '+data.msg+'</p>';
+        oLi.className ="other";
+        list.appendChild(oLi);
+
+        list.scrollTop = 99999999;
+    });
+    // 点击发送按钮，进行发送,发送自己的消息
+    btn.onclick=function () {
+          if(text.value=="") return;//如果为空，禁止发送
+          var oLi = document.createElement("li");
+          console.log(userInfo)
+          oLi.innerHTML ='<img src="'+userInfo.picUrl+'" /><p>'+userInfo.name+': '+text.value+'</p>';
+          oLi.className ="self";
+          list.appendChild(oLi);
+          list.scrollTop = 99999999;
+          socket.send(text.value);  //发送
+          text.value = "";
+      };
+      // 添加键盘事件，按enter进行发送
+      document.onkeydown=function (e) {
+        e = e || window.event;
+        var code = e.keyCode ||e.which;
+        // 如果键盘码是13（enter）
+        if (code == 13) {
+          if(text.value=="") return;
+          var oLi = document.createElement("li");
+          console.log(userInfo)
+          oLi.innerHTML ='<img src="'+userInfo.picUrl+'" /><p>'+userInfo.name+': '+text.value+'</p>';
+          oLi.className ="self";
+          list.appendChild(oLi);
+          list.scrollTop = 99999999;
+          socket.send(text.value);  //发送
+          text.value = "";
+        }
+      }
+
+    //改名操作
+    rname.onclick=function () {
+        var newName = window.prompt();//prompt()方法用于显示可提示用户进行输入的对话框。
+        userInfo.name=newName;
+        //触发改名的事件
+        socket.emit("rname",newName)
+    };
+
+    //修改图像按钮被点击
+    changePic.onclick=function () {
+        picBox.style.display="block";
+    };
+
+    //确认修改图像
+    sureBtn.onclick=function () {
+        console.log(imgUrl.value);
+        if(imgUrl.value.indexOf("http")!=-1){
+            //说明用户自己输入的图片地址
+            newPic = imgUrl.value //让图像的地址，=用户输入的地址
+            imgUrl.value=""
+        }
+
+        //隐藏遮罩
+        picBox.style.display="none";
+        //本地userInfo更新
+        userInfo.picUrl = newPic;
+        //socket请求,保存到服务器后台，页面刷新后还存在
+        socket.emit("changepic",newPic)
+    };
+
+</script>
+</body>
+</html>
